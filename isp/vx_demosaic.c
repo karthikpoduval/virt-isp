@@ -53,8 +53,9 @@ vxDemosaicValidator (vx_node node, const vx_reference parameters[],
         case 1:
           {
             vx_uint32 bayer_pattern;
-            if (vxQueryParameter (parameters[1], VX_PARAMETER_REF,
-                                  &bayer_pattern, sizeof (bayer_pattern))
+            if (vxQueryParameter ((vx_parameter)parameters[1],
+                                  VX_PARAMETER_REF, &bayer_pattern,
+                                  sizeof (bayer_pattern))
                 != VX_SUCCESS)
               return VX_ERROR_INVALID_PARAMETERS;
           }
@@ -66,32 +67,81 @@ vxDemosaicValidator (vx_node node, const vx_reference parameters[],
             vx_image input = (vx_image)parameters[0];
             vx_uint32 width = 0, height = 0;
             vx_df_image format = VX_DF_IMAGE_RGB;
-      if (vxQueryImage
-	    (input, VX_IMAGE_WIDTH, &width,
-	       sizeof (width)) != VX_SUCCESS
-	    || vxQueryImage (input, VX_IMAGE_HEIGHT, &height,
-			       sizeof (height) != VX_SUCCESS)
-	 )
-	    return VX_ERROR_INVALID_PARAMETERS;
-	    if (vxSetMetaFormatAttribute
-		  (metas[i], VX_IMAGE_FORMAT, &format,
-		     sizeof (format) != VX_SUCCESS)
-		  || vxSetMetaFormatAttribute (metas[i],
-						 VX_IMAGE_WIDTH,
-						 &width,
-						 sizeof (width)) !=
-		  VX_SUCCESS
-		  || vxSetMetaFormatAttribute (metas[i],
-						 VX_IMAGE_HEIGHT,
-						 &height,
-						 sizeof (height) !=
-						 VX_SUCCESS)
-	       )
-		  return VX_ERROR_INVALID_VALUE;
+            if (vxQueryImage (input, VX_IMAGE_WIDTH, &width, sizeof (width))
+                    != VX_SUCCESS
+                || vxQueryImage (input, VX_IMAGE_HEIGHT, &height,
+                                 sizeof (height) != VX_SUCCESS))
+              return VX_ERROR_INVALID_PARAMETERS;
+            if (vxSetMetaFormatAttribute (metas[i], VX_IMAGE_FORMAT, &format,
+                                          sizeof (format) != VX_SUCCESS)
+                || vxSetMetaFormatAttribute (metas[i], VX_IMAGE_WIDTH, &width,
+                                             sizeof (width))
+                       != VX_SUCCESS
+                || vxSetMetaFormatAttribute (metas[i], VX_IMAGE_HEIGHT,
+                                             &height,
+                                             sizeof (height) != VX_SUCCESS))
+              return VX_ERROR_INVALID_VALUE;
           }
         }
       return VX_SUCCESS;
     }
+}
+
+vx_status
+vxDemosaic (vx_image src, vx_image dst, vx_uint32 pattern)
+{
+  vx_status status = VX_SUCCESS;
+  void *src_base = NULL;
+  void *dst_base = NULL;
+  vx_df_image format = 0;
+  vx_uint32 plane = 0;
+  vx_imagepatch_addressing_t src_addr, dst_addr_r, dst_addr_g, dst_addr_b;
+  vx_map_id src_map_id, dst_map_id;
+  void *src_base_ptr = NULL;
+  void *dst_base_ptr_r = NULL;
+  void *dst_base_ptr_g = NULL;
+  void *dst_base_ptr_b = NULL;
+  vx_rectangle_t rect;
+
+  status = vxGetValidRegionImage (src, &rect);
+
+  status
+      = vxMapImagePatch (src, &rect, 0, &src_map_id, &src_addr, &src_base_ptr,
+                         VX_READ_ONLY, VX_MEMORY_TYPE_HOST, 0);
+
+  status |= vxMapImagePatch (dst, &rect, 0, &dst_map_id, &dst_addr_r,
+                             &dst_base_ptr_r, VX_WRITE_ONLY,
+                             VX_MEMORY_TYPE_HOST, 0);
+
+  status |= vxMapImagePatch (dst, &rect, 1, &dst_map_id, &dst_addr_g,
+                             &dst_base_ptr_g, VX_WRITE_ONLY,
+                             VX_MEMORY_TYPE_HOST, 0);
+
+  status |= vxMapImagePatch (dst, &rect, 2, &dst_map_id, &dst_addr_b,
+                             &dst_base_ptr_b, VX_WRITE_ONLY,
+                             VX_MEMORY_TYPE_HOST, 0);
+
+  /* 2d addressing option */
+  for (int y = 0; y < src_addr.dim_y; y += src_addr.step_y)
+    {
+      for (int x = 0; x < src_addr.dim_x; x += src_addr.step_x)
+        {
+          vx_uint16 *byr
+              = vxFormatImagePatchAddress2d (src_base_ptr, x, y, &src_addr);
+          vx_uint8 *r = vxFormatImagePatchAddress2d (dst_base_ptr_r, x, y,
+                                                     &dst_addr_r);
+          vx_uint8 *g = vxFormatImagePatchAddress2d (dst_base_ptr_r, x, y,
+                                                     &dst_addr_g);
+          vx_uint8 *b = vxFormatImagePatchAddress2d (dst_base_ptr_r, x, y,
+                                                     &dst_addr_b);
+
+          r = 0xff;
+          g = 0;
+          b = 0;
+        }
+    }
+
+  return status;
 }
 
 /*!
@@ -116,6 +166,7 @@ vxDemosaicKernel (vx_node node, const vx_reference *parameters, vx_uint32 num)
       vx_image input = (vx_image)parameters[0];
       vx_uint32 bayer_pattern = (vx_uint32)parameters[1];
       vx_image output = (vx_image)parameters[2];
+      status = vxDemosaic (input, output, bayer_pattern);
     }
   return status;
 }
