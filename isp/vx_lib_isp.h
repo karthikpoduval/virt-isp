@@ -37,7 +37,8 @@ extern "C" {
  * \param [out] output The output image.
  * \ingroup group_example_kernel
  */
-vx_node vxDemosaicNode(vx_graph graph, vx_image input, vx_uint32 bayer_pattern, vx_image output);
+//vx_node vxDemosaicNode(vx_graph graph, vx_image input, vx_uint32 bayer_pattern, vx_image output);
+vx_node vxDemosaicNode(vx_graph graph, vx_image input, vx_image output);
 // end::node[]
 
 // tag::vxu[]

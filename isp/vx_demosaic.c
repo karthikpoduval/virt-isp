@@ -10,6 +10,7 @@
 #include "vx_lib_isp.h"
 #include <VX/vx.h>
 #include <VX/vx_helper.h>
+#include <stdio.h>
 
 /*! \brief demosaic parameter validator.
  * \param [in] node The handle to the node.
@@ -22,18 +23,19 @@ vx_status VX_CALLBACK
 vxDemosaicValidator (vx_node node, const vx_reference parameters[],
                      vx_uint32 num, vx_meta_format metas[])
 {
+  vxAddLogEntry((vx_reference)node, VX_SUCCESS, "%s \n", __func__);
+  printf("%s num=%d\n", __func__, num);
   vx_status;
   (void)node;
-
-  if (num != 3)
+  if (num != 2)
     return VX_ERROR_INVALID_PARAMETERS;
-
+	
   for (vx_uint32 i = 0u; i < num; i++)
     {
       if (!parameters[i])
         return VX_ERROR_INVALID_REFERENCE;
 
-      switch (num)
+      switch (i)
         {
         case 0:
           {
@@ -46,32 +48,38 @@ vxDemosaicValidator (vx_node node, const vx_reference parameters[],
 
             /* RAW BAYER Needs to be upto 16 bit */
             if (input_image != VX_DF_IMAGE_U16)
+	    {
+  	      vxAddLogEntry((vx_reference)node, VX_SUCCESS, "Not VX_DF_IMAGE_U16");
+  	      printf("Not VX_DF_IMAGE_U16");
               return VX_ERROR_INVALID_VALUE;
+	    }
           }
           break;
-
         case 1:
           {
-            vx_uint32 bayer_pattern;
-            if (vxQueryParameter ((vx_parameter)parameters[1],
-                                  VX_PARAMETER_REF, &bayer_pattern,
-                                  sizeof (bayer_pattern))
-                != VX_SUCCESS)
-              return VX_ERROR_INVALID_PARAMETERS;
-          }
-          break;
-
-        case 2:
-          {
-
+	   
             vx_image input = (vx_image)parameters[0];
             vx_uint32 width = 0, height = 0;
             vx_df_image format = VX_DF_IMAGE_RGB;
-            if (vxQueryImage (input, VX_IMAGE_WIDTH, &width, sizeof (width))
-                    != VX_SUCCESS
-                || vxQueryImage (input, VX_IMAGE_HEIGHT, &height,
-                                 sizeof (height) != VX_SUCCESS))
+	    vx_status s = vxQueryImage(input, VX_IMAGE_WIDTH, &width, sizeof (width));
+	    printf("status %d\n", s);
+	    vx_status s2 = vxQueryImage(input, VX_IMAGE_HEIGHT, &height, sizeof (height));
+	    printf("status %d\n", s2);
+            //if ((vxQueryImage(input, VX_IMAGE_WIDTH, &width, sizeof (width)) != VX_SUCCESS)
+            //    || (vxQueryImage (input, VX_IMAGE_HEIGHT, &height, sizeof (height) != VX_SUCCESS)))
+	     if(s != VX_SUCCESS || s2 != VX_SUCCESS)
+	    {
+
+  	      printf("unable to query input image\n");
               return VX_ERROR_INVALID_PARAMETERS;
+	    }
+	    else {
+	    	printf("width=%d height=%d\n", width, height);
+	    }
+	    vx_status s3 = vxSetMetaFormatAttribute (metas[i], VX_IMAGE_FORMAT, &format, sizeof (format)); 
+	    vx_status s4 = vxSetMetaFormatAttribute (metas[i], VX_IMAGE_WIDTH, &width, sizeof (width)); 
+	    vx_status s5 = vxSetMetaFormatAttribute (metas[i], VX_IMAGE_HEIGHT, &height, sizeof (height)); 
+#if 0
             if (vxSetMetaFormatAttribute (metas[i], VX_IMAGE_FORMAT, &format,
                                           sizeof (format) != VX_SUCCESS)
                 || vxSetMetaFormatAttribute (metas[i], VX_IMAGE_WIDTH, &width,
@@ -80,15 +88,20 @@ vxDemosaicValidator (vx_node node, const vx_reference parameters[],
                 || vxSetMetaFormatAttribute (metas[i], VX_IMAGE_HEIGHT,
                                              &height,
                                              sizeof (height) != VX_SUCCESS))
+#endif
+	     if(s3 || s4 || s5)
+	     {
+  	      printf("unable to set meta\n");
               return VX_ERROR_INVALID_VALUE;
+	     }
           }
         }
-      return VX_SUCCESS;
     }
+    return VX_SUCCESS;
 }
 
 vx_status
-vxDemosaic (vx_image src, vx_image dst, vx_uint32 pattern)
+vxDemosaic (vx_image src, vx_image dst)
 {
   vx_status status = VX_SUCCESS;
   void *src_base = NULL;
@@ -164,21 +177,20 @@ vxDemosaicKernel (vx_node node, const vx_reference *parameters, vx_uint32 num)
   if (num == 3)
     {
       vx_image input = (vx_image)parameters[0];
-      vx_uint32 bayer_pattern = (vx_uint32)parameters[1];
-      vx_image output = (vx_image)parameters[2];
-      status = vxDemosaic (input, output, bayer_pattern);
+      vx_image output = (vx_image)parameters[1];
+      status = vxDemosaic (input, output);
     }
   return status;
 }
 
 vx_node
-vxDemosaicNode (vx_graph graph, vx_image input, vx_uint32 bayer_pattern,
+//vxDemosaicNode (vx_graph graph, vx_image input, vx_uint32 bayer_pattern,
+vxDemosaicNode (vx_graph graph, vx_image input,
                 vx_image output)
 {
-
+  printf("%s\n", __func__);
   vx_reference params[] = {
     (vx_reference)input,
-    (vx_reference)bayer_pattern,
     (vx_reference)output,
   };
 
@@ -188,8 +200,7 @@ vxDemosaicNode (vx_graph graph, vx_image input, vx_uint32 bayer_pattern,
 
 static vx_param_description_t demosaic_kernel_params[] = {
   { VX_INPUT, VX_TYPE_IMAGE, VX_PARAMETER_STATE_REQUIRED },
-  { VX_INPUT, VX_TYPE_UINT32, VX_PARAMETER_STATE_REQUIRED },
-  { VX_INPUT, VX_TYPE_IMAGE, VX_PARAMETER_STATE_REQUIRED },
+  { VX_OUTPUT, VX_TYPE_IMAGE, VX_PARAMETER_STATE_REQUIRED },
 };
 
 vx_kernel_description_t demosaic_kernel = {

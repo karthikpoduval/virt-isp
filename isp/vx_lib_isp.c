@@ -49,6 +49,8 @@ static vx_uint32 num_kernels = dimof(isp_kernels);
                 isp_kernels[k]->initialize,
                 isp_kernels[k]->deinitialize);
 
+  vxAddLogEntry((vx_reference)context, VX_SUCCESS, "%s \n", __func__);
+  printf("%s \n", __func__);
         if (kernel)
         {
             status = VX_SUCCESS; // temporary
@@ -62,7 +64,9 @@ static vx_uint32 num_kernels = dimof(isp_kernels);
                 {
                     vxAddLogEntry((vx_reference)context, status, "Failed to add parameter %d to kernel %s! (%d)\n", p, isp_kernels[k]->name, status);
                     break;
-                }
+                } 
+                    //vxAddLogEntry((vx_reference)context, status, "Add parameter %d to kernel %s! (%d) SUCCESS\n", p, isp_kernels[k]->name, status);
+                    //printf("Add parameter %d to kernel %s! (%d) SUCCESS\n", p, isp_kernels[k]->name, status);
             }
             if (status == VX_SUCCESS)
             {
