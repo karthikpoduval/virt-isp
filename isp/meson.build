@@ -9,9 +9,9 @@ libisp_sources = files('vx_lib_isp.c', 'vx_demosaic.c')
 # Create a shared library target for the C library
 libisp = shared_library('openvx-isp', libisp_sources, link_args : ['-lopenvx', '-lopenvx-debug'])
 
-test_isp_sources = files('test_isp.c')
+test_isp_sources = files('test_isp2.c')
 
 # Create an executable target for the C++ application
-test_isp = executable('test_isp', test_isp_sources, link_with: libisp, link_args : '-lopenvx')
+test_isp = executable('test_isp', test_isp_sources, link_with: libisp, link_args : ['-lopenvx', '-lopenvx-c_model'])
 
 
