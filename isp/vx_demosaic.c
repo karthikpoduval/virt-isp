@@ -116,16 +116,17 @@ vxDemosaic (vx_image src, vx_image dst)
   void *dst_base_ptr_b = NULL;
   vx_rectangle_t rect;
 
+  printf("############################\n");
   status = vxGetValidRegionImage (src, &rect);
-
-  status
-      = vxMapImagePatch (src, &rect, 0, &src_map_id, &src_addr, &src_base_ptr,
+  if(status == VX_SUCCESS)
+  {
+  status = vxMapImagePatch (src, &rect, 0, &src_map_id, &src_addr, &src_base_ptr,
                          VX_READ_ONLY, VX_MEMORY_TYPE_HOST, 0);
 
   status |= vxMapImagePatch (dst, &rect, 0, &dst_map_id, &dst_addr_r,
                              &dst_base_ptr_r, VX_WRITE_ONLY,
                              VX_MEMORY_TYPE_HOST, 0);
-
+#if 0
   status |= vxMapImagePatch (dst, &rect, 1, &dst_map_id, &dst_addr_g,
                              &dst_base_ptr_g, VX_WRITE_ONLY,
                              VX_MEMORY_TYPE_HOST, 0);
@@ -133,26 +134,36 @@ vxDemosaic (vx_image src, vx_image dst)
   status |= vxMapImagePatch (dst, &rect, 2, &dst_map_id, &dst_addr_b,
                              &dst_base_ptr_b, VX_WRITE_ONLY,
                              VX_MEMORY_TYPE_HOST, 0);
-
+#endif
+  } else {
+	  printf("Unable to access image rect\n");
+  }
   /* 2d addressing option */
   for (int y = 0; y < src_addr.dim_y; y += src_addr.step_y)
     {
       for (int x = 0; x < src_addr.dim_x; x += src_addr.step_x)
         {
+	  //printf("x=%d y=%d\n", x, y);
           vx_uint16 *byr
               = vxFormatImagePatchAddress2d (src_base_ptr, x, y, &src_addr);
           vx_uint8 *r = vxFormatImagePatchAddress2d (dst_base_ptr_r, x, y,
                                                      &dst_addr_r);
-          vx_uint8 *g = vxFormatImagePatchAddress2d (dst_base_ptr_r, x, y,
+#if 0
+     	  vx_uint8 *g = vxFormatImagePatchAddress2d (dst_base_ptr_g, x, y,
                                                      &dst_addr_g);
-          vx_uint8 *b = vxFormatImagePatchAddress2d (dst_base_ptr_r, x, y,
+          vx_uint8 *b = vxFormatImagePatchAddress2d (dst_base_ptr_b, x, y,
                                                      &dst_addr_b);
-
-          r = 0xff;
-          g = 0;
-          b = 0;
+#endif
+	  //printf("%p\n", r); 
+          r[0] = 0xff;
+          r[1] = 0xff;
+          r[2] = 0xff;
+          //g = 0;
+          //b = 0;
         }
     }
+  status = vxUnmapImagePatch(src, src_map_id);
+  status = vxUnmapImagePatch(dst, dst_map_id);
 
   return status;
 }
@@ -174,7 +185,7 @@ vx_status VX_CALLBACK
 vxDemosaicKernel (vx_node node, const vx_reference *parameters, vx_uint32 num)
 {
   vx_status status = VX_ERROR_INVALID_PARAMETERS;
-  if (num == 3)
+  if (num == 2)
     {
       vx_image input = (vx_image)parameters[0];
       vx_image output = (vx_image)parameters[1];
