@@ -24,6 +24,21 @@ enum vx_kernel_isp_e {
     // up to 0xFFF kernel enums can be created.
 };
 
+enum vx_isp_demosaic_pattern_e {
+    VX_DEMOSAIC_PATTERN_BGGR = 0x0,
+    VX_DEMOSAIC_PATTERN_GBRG = 0x1,
+    VX_DEMOSAIC_PATTERN_GRBG = 0x2,
+    VX_DEMOSAIC_PATTERN_RGGB = 0x3,
+};
+
+enum vx_isp_bayer_pixel_e {
+    VX_DEMOSAIC_PIXEL_B = 0x0,
+    VX_DEMOSAIC_PIXEL_Gr = 0x1,
+    VX_DEMOSAIC_PIXEL_Gb = 0x2,
+    VX_DEMOSAIC_PIXEL_R = 0x3,
+};
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif

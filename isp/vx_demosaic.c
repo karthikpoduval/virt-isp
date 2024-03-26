@@ -12,6 +12,16 @@
 #include <VX/vx_helper.h>
 #include <stdio.h>
 
+#define TOP_LEFT(x) x[0][0]
+#define TOP_CENTER(x) x[1][0]
+#define TOP_RIGHT(x) x[2][0]
+#define MID_LEFT(x) x[0][1]
+#define MID_CENTER(x) x[1][1]
+#define MID_RIGHT(x) x[2][1]
+#define BOTTOM_LEFT(x) x[0][0]
+#define BOTTOM_CENTER(x) x[1][0]
+#define BOTTOM_RIGHT(x) x[2][0]
+
 /*! \brief demosaic parameter validator.
  * \param [in] node The handle to the node.
  * \param [in] parameters The array of parameters to be validated.
@@ -100,6 +110,29 @@ vxDemosaicValidator (vx_node node, const vx_reference parameters[],
     return VX_SUCCESS;
 }
 
+
+int getPixelFromBayerPattern(int pattern, int x, int y)
+{
+	int patternBGGR[2][2] = { {VX_DEMOSAIC_PIXEL_B, VX_DEMOSAIC_PIXEL_Gr}, {VX_DEMOSAIC_PIXEL_Gb, VX_DEMOSAIC_PIXEL_R}};
+	int patternGRBG[2][2] = { {VX_DEMOSAIC_PIXEL_Gr, VX_DEMOSAIC_PIXEL_R}, {VX_DEMOSAIC_PIXEL_B, VX_DEMOSAIC_PIXEL_Gb}};
+	int patternGBRG[2][2] = { {VX_DEMOSAIC_PIXEL_Gb, VX_DEMOSAIC_PIXEL_B}, {VX_DEMOSAIC_PIXEL_R, VX_DEMOSAIC_PIXEL_Gr}};
+	int patternRGGB[2][2] = { {VX_DEMOSAIC_PIXEL_R, VX_DEMOSAIC_PIXEL_Gr}, {VX_DEMOSAIC_PIXEL_Gb, VX_DEMOSAIC_PIXEL_B}};
+	switch(pattern)
+	{
+
+		case VX_DEMOSAIC_PATTERN_BGGR:
+			return patternBGGR[x%2][y%2];
+		case VX_DEMOSAIC_PATTERN_GRBG:
+			return patternGRBG[x%2][y%2];
+		case VX_DEMOSAIC_PATTERN_GBRG:
+			return patternGBRG[x%2][y%2];
+		case VX_DEMOSAIC_PATTERN_RGGB:
+			return patternRGGB[x%2][y%2];
+	}
+
+}
+
+
 vx_status
 vxDemosaic (vx_image src, vx_image dst)
 {
@@ -144,22 +177,76 @@ vxDemosaic (vx_image src, vx_image dst)
       for (int x = 0; x < src_addr.dim_x; x += src_addr.step_x)
         {
 	  //printf("x=%d y=%d\n", x, y);
-          vx_uint16 *byr
-              = vxFormatImagePatchAddress2d (src_base_ptr, x, y, &src_addr);
-          vx_uint8 *r = vxFormatImagePatchAddress2d (dst_base_ptr_r, x, y,
+          //vx_uint16 *byr = vxFormatImagePatchAddress2d (src_base_ptr, x, y, &src_addr);
+          vx_uint8 *rgb = vxFormatImagePatchAddress2d (dst_base_ptr_r, x, y,
                                                      &dst_addr_r);
+	  vx_uint8 *r = &rgb[0];
+	  vx_uint8 *g = &rgb[1];
+	  vx_uint8 *b = &rgb[2];
 #if 0
      	  vx_uint8 *g = vxFormatImagePatchAddress2d (dst_base_ptr_g, x, y,
                                                      &dst_addr_g);
           vx_uint8 *b = vxFormatImagePatchAddress2d (dst_base_ptr_b, x, y,
                                                      &dst_addr_b);
-#endif
 	  //printf("%p\n", r); 
           r[0] = 0xff;
           r[1] = 0xff;
           r[2] = 0xff;
           //g = 0;
           //b = 0;
+#endif
+	/* use 3x3 patch to interpolate values for each color channel */
+	vx_uint16 window[3][3] = {0,};
+	/* fill the window with pixels and do boundary mirroring if necessary */
+	/* the following steaps are only possible for x > 3 and y > 3 */
+	if((x>3) && (y>3) && x<=(src_addr.step_x-3) && y<=(src_addr.step_y-3))
+	{
+		window[0][0] = vxFormatImagePatchAddress2d(src_base_ptr, x-1, y-1, &src_addr);
+		window[0][1] = vxFormatImagePatchAddress2d(src_base_ptr, x, y-1, &src_addr);
+		window[0][2] = vxFormatImagePatchAddress2d(src_base_ptr, x+1, y-1, &src_addr);
+		window[1][0] = vxFormatImagePatchAddress2d(src_base_ptr, x-1, y-1, &src_addr);
+		window[1][1] = vxFormatImagePatchAddress2d(src_base_ptr, x, y, &src_addr);
+		window[1][2] = vxFormatImagePatchAddress2d(src_base_ptr, x+1, y, &src_addr);
+		window[2][0] = vxFormatImagePatchAddress2d(src_base_ptr, x-1, y+1, &src_addr);
+		window[2][1] = vxFormatImagePatchAddress2d(src_base_ptr, x, y+1, &src_addr);
+		window[2][2] = vxFormatImagePatchAddress2d(src_base_ptr, x+1, y+1, &src_addr);
+	}
+
+	/* find in current pixel is B,Gr,Gb or R */
+	int bayerPixel = getPixelFromBayerPattern(VX_DEMOSAIC_PATTERN_BGGR , x, y);
+	switch(bayerPixel)
+	{
+		case VX_DEMOSAIC_PIXEL_B:
+			{
+				r = ((TOP_LEFT(window) + TOP_RIGHT(window) + BOTTOM_LEFT(window) + BOTTOM_RIGHT(window))/4)>>6;
+				g = ((TOP_CENTER(window) + MID_LEFT(window) + MID_RIGHT(window) + BOTTOM_CENTER(window))/4)>>6;
+				b = MID_CENTER(window)>>6;
+			}
+			break;
+		case VX_DEMOSAIC_PIXEL_Gr:
+			{
+				r = ((MID_LEFT(window) + MID_RIGHT(window))/2)>>6;
+				g = MID_CENTER(window)>>6;
+				b = ((TOP_CENTER(window) + BOTTOM_CENTER(window))/2)>>6;
+			}
+			break;
+		case VX_DEMOSAIC_PIXEL_Gb:
+			{
+				r = ((TOP_CENTER(window) + BOTTOM_CENTER(window))/2)>>6;
+				g = MID_CENTER(window)>>6;
+				b = ((MID_LEFT(window) + MID_RIGHT(window))/2)>>6;
+			}
+			break;
+		case VX_DEMOSAIC_PIXEL_R:
+			{
+				r = MID_CENTER(window)>>6;
+				g = ((TOP_CENTER(window) + MID_LEFT(window) + MID_RIGHT(window) + BOTTOM_CENTER(window))/4)>>6;
+				b = ((TOP_LEFT(window) + TOP_RIGHT(window) + BOTTOM_LEFT(window) + BOTTOM_RIGHT(window))/4)>>6;
+			}
+			break;
+
+
+	}
         }
     }
   status = vxUnmapImagePatch(src, src_map_id);
