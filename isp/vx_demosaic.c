@@ -172,14 +172,15 @@ vxDemosaic (vx_image src, vx_image dst)
 	  printf("Unable to access image rect\n");
   }
   /* 2d addressing option */
-  for (int y = 0; y < src_addr.dim_y; y += src_addr.step_y)
+  for (int y = 0; y < dst_addr_r.dim_y; y += dst_addr_r.step_y)
     {
-      for (int x = 0; x < src_addr.dim_x; x += src_addr.step_x)
+      for (int x = 0; x < dst_addr_r.dim_x; x += dst_addr_r.step_x)
         {
-	  //printf("x=%d y=%d\n", x, y);
-          //vx_uint16 *byr = vxFormatImagePatchAddress2d (src_base_ptr, x, y, &src_addr);
+         // vx_uint16 *byr = vxFormatImagePatchAddress2d (src_base_ptr, x, y, &src_addr);
+	 // printf("%x\n", *byr);
           vx_uint8 *rgb = vxFormatImagePatchAddress2d (dst_base_ptr_r, x, y,
                                                      &dst_addr_r);
+	  //printf("x=%d y=%d ptr=%p\n", x, y, rgb);
 	  vx_uint8 *r = &rgb[0];
 	  vx_uint8 *g = &rgb[1];
 	  vx_uint8 *b = &rgb[2];
@@ -197,56 +198,65 @@ vxDemosaic (vx_image src, vx_image dst)
 #endif
 	/* use 3x3 patch to interpolate values for each color channel */
 	vx_uint16 window[3][3] = {0,};
+	vx_uint16 *ptr;
+
+	//ptr = vxFormatImagePatchAddress2d(src_base_ptr, x, y, &src_addr);
 	/* fill the window with pixels and do boundary mirroring if necessary */
 	/* the following steaps are only possible for x > 3 and y > 3 */
-	if((x>3) && (y>3) && x<=(src_addr.step_x-3) && y<=(src_addr.step_y-3))
+	if((x>3) && (y>3) && x<=(src_addr.dim_x-3) && y<=(src_addr.dim_y-3))
 	{
-		window[0][0] = vxFormatImagePatchAddress2d(src_base_ptr, x-1, y-1, &src_addr);
-		window[0][1] = vxFormatImagePatchAddress2d(src_base_ptr, x, y-1, &src_addr);
-		window[0][2] = vxFormatImagePatchAddress2d(src_base_ptr, x+1, y-1, &src_addr);
-		window[1][0] = vxFormatImagePatchAddress2d(src_base_ptr, x-1, y-1, &src_addr);
-		window[1][1] = vxFormatImagePatchAddress2d(src_base_ptr, x, y, &src_addr);
-		window[1][2] = vxFormatImagePatchAddress2d(src_base_ptr, x+1, y, &src_addr);
-		window[2][0] = vxFormatImagePatchAddress2d(src_base_ptr, x-1, y+1, &src_addr);
-		window[2][1] = vxFormatImagePatchAddress2d(src_base_ptr, x, y+1, &src_addr);
-		window[2][2] = vxFormatImagePatchAddress2d(src_base_ptr, x+1, y+1, &src_addr);
+		window[0][0] = *((vx_uint16*)vxFormatImagePatchAddress2d(src_base_ptr, x-3, y-3, &src_addr));
+		window[0][1] = *((vx_uint16*)vxFormatImagePatchAddress2d(src_base_ptr, x-2, y-3, &src_addr));
+		window[0][2] = *((vx_uint16*)vxFormatImagePatchAddress2d(src_base_ptr, x-1, y-3, &src_addr));
+		window[1][0] = *((vx_uint16*)vxFormatImagePatchAddress2d(src_base_ptr, x-3, y-2, &src_addr));
+		window[1][1] = *((vx_uint16*)vxFormatImagePatchAddress2d(src_base_ptr, x-2, y-2, &src_addr));
+		window[1][2] = *((vx_uint16*)vxFormatImagePatchAddress2d(src_base_ptr, x-1, y-2, &src_addr));
+		window[2][0] = *((vx_uint16*)vxFormatImagePatchAddress2d(src_base_ptr, x-3, y-1, &src_addr));
+		window[2][1] = *((vx_uint16*)vxFormatImagePatchAddress2d(src_base_ptr, x-2, y-1, &src_addr));
+		window[2][2] = *((vx_uint16*)vxFormatImagePatchAddress2d(src_base_ptr, x-1, y-1, &src_addr));
+	}
+	else
+	{
+		//window[1][1] = *((vx_uint16*)vxFormatImagePatchAddress2d(src_base_ptr, x, y, &src_addr));
 	}
 
 	/* find in current pixel is B,Gr,Gb or R */
-	int bayerPixel = getPixelFromBayerPattern(VX_DEMOSAIC_PATTERN_BGGR , x, y);
+	int bayerPixel = getPixelFromBayerPattern(VX_DEMOSAIC_PATTERN_RGGB , x, y);
 	switch(bayerPixel)
 	{
 		case VX_DEMOSAIC_PIXEL_B:
 			{
-				r = ((TOP_LEFT(window) + TOP_RIGHT(window) + BOTTOM_LEFT(window) + BOTTOM_RIGHT(window))/4)>>6;
-				g = ((TOP_CENTER(window) + MID_LEFT(window) + MID_RIGHT(window) + BOTTOM_CENTER(window))/4)>>6;
-				b = MID_CENTER(window)>>6;
+				*r = ((TOP_LEFT(window) + TOP_RIGHT(window) + BOTTOM_LEFT(window) + BOTTOM_RIGHT(window))/4)>>6;
+				*g = ((TOP_CENTER(window) + MID_LEFT(window) + MID_RIGHT(window) + BOTTOM_CENTER(window))/4)>>6;
+				*b = MID_CENTER(window)>>6;
 			}
 			break;
 		case VX_DEMOSAIC_PIXEL_Gr:
 			{
-				r = ((MID_LEFT(window) + MID_RIGHT(window))/2)>>6;
-				g = MID_CENTER(window)>>6;
-				b = ((TOP_CENTER(window) + BOTTOM_CENTER(window))/2)>>6;
+				*r = ((MID_LEFT(window) + MID_RIGHT(window))/2)>>6;
+				*g = MID_CENTER(window)>>6;
+				*b = ((TOP_CENTER(window) + BOTTOM_CENTER(window))/2)>>6;
 			}
 			break;
 		case VX_DEMOSAIC_PIXEL_Gb:
 			{
-				r = ((TOP_CENTER(window) + BOTTOM_CENTER(window))/2)>>6;
-				g = MID_CENTER(window)>>6;
-				b = ((MID_LEFT(window) + MID_RIGHT(window))/2)>>6;
+				*r = ((TOP_CENTER(window) + BOTTOM_CENTER(window))/2)>>6;
+				*g = MID_CENTER(window)>>6;
+				*b = ((MID_LEFT(window) + MID_RIGHT(window))/2)>>6;
 			}
 			break;
 		case VX_DEMOSAIC_PIXEL_R:
 			{
-				r = MID_CENTER(window)>>6;
-				g = ((TOP_CENTER(window) + MID_LEFT(window) + MID_RIGHT(window) + BOTTOM_CENTER(window))/4)>>6;
-				b = ((TOP_LEFT(window) + TOP_RIGHT(window) + BOTTOM_LEFT(window) + BOTTOM_RIGHT(window))/4)>>6;
+				*r = MID_CENTER(window)>>6;
+				*g = ((TOP_CENTER(window) + MID_LEFT(window) + MID_RIGHT(window) + BOTTOM_CENTER(window))/4)>>6;
+				*b = ((TOP_LEFT(window) + TOP_RIGHT(window) + BOTTOM_LEFT(window) + BOTTOM_RIGHT(window))/4)>>6;
 			}
 			break;
 
-
 	}
+	//*r = 0;
+	//*g = 0;
+	//*b = 0xff;
         }
     }
   status = vxUnmapImagePatch(src, src_map_id);
